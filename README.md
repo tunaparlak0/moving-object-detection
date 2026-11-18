@@ -4,6 +4,7 @@ Project-7: detect and track truly moving objects in videos captured from a movin
 platform (UAV / handheld / vehicle) by compensating camera ego-motion.
 
 ## Pipeline
+
 1. **Optical flow** – dense (Farneback) / sparse (Lucas-Kanade) motion between frames.
 2. **Global motion estimation** – Affine or Homography (RANSAC) on background flow.
 3. **Compensation** – warp the previous frame onto the current frame.
@@ -12,10 +13,12 @@ platform (UAV / handheld / vehicle) by compensating camera ego-motion.
 6. **Evaluation** – compare against ground-truth boxes (Precision / Recall / F1 / IoU, MOT metrics).
 
 ## Dataset requirements
+
 - ≥ 25 original videos, ≥ 512x512, ≥ 15 s each
 - Ground-truth bounding boxes for **moving** objects only
 
 ## Layout
+
 ```
 data/videos/        raw videos (not committed)
 data/annotations/   ground-truth boxes
@@ -25,8 +28,21 @@ results/            outputs (not committed)
 ```
 
 ## Setup
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+Video Sources: https://www.pexels.com/search/videos/drone%20footage/
+
+## Usage
+```powershell
+.venv\Scripts\python -m src.check_videos                    # dataset requirements check
+.venv\Scripts\python -m src.run_pipeline vid_001            # compensated 3-frame differencing
+.venv\Scripts\python -m src.run_pipeline all --method mog2  # compensated MOG2, all videos
+.venv\Scripts\python -m src.run_pipeline vid_001 --flow farneback --model affine
+.venv\Scripts\python -m pytest -q tests                     # synthetic moving-camera tests
+```
+Outputs go to `results/<video>/<method>_<flow>_<model>/` (`detections.txt`, `motion.csv`, `vis.mp4`).
