@@ -61,3 +61,4 @@ ultralytics-platform==0.1.113
 ultralytics-thop==2.2.5
 urllib3==2.8.0
 xmltodict==1.0.4
+imageio-ffmpeg==0.8.1
