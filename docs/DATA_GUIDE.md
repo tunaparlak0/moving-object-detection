@@ -47,7 +47,7 @@ data/manifest.csv                        (her videonun meta bilgisi)
 ## 4. Etiketleme — CVAT
 Araç: **CVAT** (https://app.cvat.ai — ücretsiz hesap, ya da yerel Docker kurulumu).
 
-1. Yeni proje → etiket listesi (sıra önemli): `person`, `car`, `truck`, `bus`, `bicycle`, `motorbike`.
+1. Yeni proje → etiket listesi (sıra önemli): `vehicle` (araba/kamyon/otobüs), `two_wheeler` (bisiklet/motosiklet), `person`.
 2. Her video için bir task oluşturun, videoyu yükleyin.
 3. **Track modu** kullanın (Shape değil): nesneye kutu çizip birkaç karede bir anahtar
    kare (keyframe) ayarlayın; CVAT aradaki kareleri enterpolasyonla doldurur.

@@ -30,9 +30,19 @@ from scipy.optimize import linear_sum_assignment
 from src.egomotion import estimate_motion
 from src.video_io import make_writer
 
-LABELS = ["person", "car", "truck", "bus", "bicycle", "motorbike"]
+# Detector classes (kept fine-grained in the detection cache) ...
+RAW_CLASSES = ["person", "car", "truck", "bus", "bicycle", "motorbike"]
 UAVDT_MAP = {"car": "car", "truck": "truck", "bus": "bus"}
 COCO_MAP = {"person": "person", "bicycle": "bicycle", "motorcycle": "motorbike"}
+# ... are merged into coarse annotation labels: the task is moving vs. static, the
+# class only matters for per-type analysis (e.g. recall on small two-wheelers).
+LABELS = ["vehicle", "two_wheeler", "person"]
+RAW_TO_LABEL = {"person": "person", "car": "vehicle", "truck": "vehicle", "bus": "vehicle",
+                "bicycle": "two_wheeler", "motorbike": "two_wheeler"}
+
+
+def label_of(raw_idx: int) -> int:
+    return LABELS.index(RAW_TO_LABEL[RAW_CLASSES[raw_idx]])
 MODELS_DIR = Path("models")
 
 
@@ -54,7 +64,7 @@ def detect_frame(models, frame, conf: float, imgsz: int):
                                           r.boxes.cls.cpu().numpy().astype(int)):
             lab = mapping.get(names[c])
             if lab is not None:
-                out.append([x1, y1, x2, y2, s, LABELS.index(lab)])
+                out.append([x1, y1, x2, y2, s, RAW_CLASSES.index(lab)])
     return np.array(out, np.float32).reshape(-1, 6)
 
 
@@ -191,7 +201,7 @@ def export(vpath: Path, tracks, keep: dict, size, fps, out_dir: Path, preview: b
             if m:
                 x1, y1, x2, y2 = np.clip(bx, 0, [size[0], size[1], size[0], size[1]])
                 if x2 - x1 > 2 and y2 - y1 > 2:
-                    rows.append((fi + 1, tr.tid, x1, y1, x2 - x1, y2 - y1, tr.label + 1))
+                    rows.append((fi + 1, tr.tid, x1, y1, x2 - x1, y2 - y1, label_of(tr.label) + 1))
     rows.sort()
     gt = "".join(f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},1,{c},1.0\n" for f, i, x, y, w, h, c in rows)
     (out_dir / f"{vpath.stem}.txt").write_text(gt)
@@ -219,7 +229,7 @@ def export(vpath: Path, tracks, keep: dict, size, fps, out_dir: Path, preview: b
                 col = (0, 220, 0) if m else (150, 150, 150)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), col, 2 if m else 1)
                 if m:
-                    cv2.putText(frame, f"{tid}:{LABELS[lab]}", (x1, y1 - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.4, col, 1)
+                    cv2.putText(frame, f"{tid}:{LABELS[label_of(lab)]}", (x1, y1 - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.4, col, 1)
             cv2.putText(frame, str(fi + 1), (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             wr.write(frame)
             fi += 1
