@@ -1,12 +1,38 @@
+# --- Python / environment ---
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 .ipynb_checkpoints/
-# Large media (keep out of git; share via Drive/LFS)
+*.egg-info/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Large media: videos are shared outside git (sources in data/manifest.csv) ---
 data/videos/*
 !data/videos/.gitkeep
-results/*
-!results/.gitkeep
+data/dev/
 *.mp4
 *.avi
 *.mov
+*.mkv
+
+# --- Model weights (download instructions in README) ---
+models/
+*.pt
+*.pth
+*.onnx
+
+# --- Generated outputs (reproducible with the scripts) ---
+results/*
+!results/.gitkeep
+*.npz
+
+# Ground truth (data/annotations/*.txt) IS tracked.

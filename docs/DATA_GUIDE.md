@@ -47,7 +47,7 @@ data/manifest.csv                        (her videonun meta bilgisi)
 ## 4. Etiketleme — CVAT
 Araç: **CVAT** (https://app.cvat.ai — ücretsiz hesap, ya da yerel Docker kurulumu).
 
-1. Yeni proje → tek etiket listesi: `person`, `car`, `bicycle`, `motorbike`, `other`.
+1. Yeni proje → etiket listesi (sıra önemli): `person`, `car`, `truck`, `bus`, `bicycle`, `motorbike`.
 2. Her video için bir task oluşturun, videoyu yükleyin.
 3. **Track modu** kullanın (Shape değil): nesneye kutu çizip birkaç karede bir anahtar
    kare (keyframe) ayarlayın; CVAT aradaki kareleri enterpolasyonla doldurur.
@@ -64,6 +64,21 @@ Araç: **CVAT** (https://app.cvat.ai — ücretsiz hesap, ya da yerel Docker kur
   "occluded" işaretleyin.
 - Çok küçük nesneler (< 10x10 piksel) etiketlenmez.
 - Kare dışına çıkan nesne: görünür kısmı kutulanır, tamamen çıkınca track biter.
+
+## 4b. Yarı otomatik ön etiketleme (önerilen)
+```powershell
+.venv\Scripts\python -m src.preannotate vid_002      # veya: all
+```
+- Dedektör (UAVDT YOLOv9s + COCO YOLO11s) → ego-motion telafili takip → hareket filtresi.
+- Çıktılar `results/preannot/`: `vid_XXX_mot.zip` (CVAT'a yüklenecek), `vid_XXX_preview.mp4`
+  (yeşil = hareketli olarak tutuldu, gri = statik diye elendi).
+- CVAT: task'ı oluştur → **Actions → Upload annotations → "MOT 1.1"** → zip'i seç.
+- Sonra elle düzelt: kaçırılan hareketli nesneleri ekle, yanlış tutulan statik olanları sil,
+  kayan kutuları düzelt, ID değişimlerini birleştir. Ardından "MOT 1.1" olarak dışa aktar.
+- Filtre eşiğini değiştirmek için (tespit önbellekten okunur, hızlıdır):
+  `python -m src.preannotate vid_002 --speed-thresh 0.4`
+
+> Ön etiketler TASLAKTIR; değerlendirmede kullanılan GT mutlaka elle kontrol edilmiş olmalı.
 
 ## 5. MOT ground truth formatı
 Her satır bir karedeki bir nesne:

@@ -27,6 +27,7 @@ import numpy as np
 
 from src.egomotion import estimate_motion, warp_to
 from src.foreground import clean_mask, compensated_diff, compensated_mog2, mask_to_boxes
+from src.video_io import make_writer
 
 DEFAULTS = dict(
     proc_max_side=960,   # processing resolution (longest side, px)
@@ -71,7 +72,7 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
     mot_w.writerow(["frame", "ok", "inlier_ratio", "n_points"])
     writer = None
     if save_video:
-        writer = cv2.VideoWriter(str(out_dir / "vis.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), fps, (pw * 2, ph))
+        writer = make_writer(out_dir / "vis.mp4", fps, (pw * 2, ph))
     erode_k = cv2.getStructuringElement(cv2.MORPH_RECT, (cfg["border_erode"],) * 2)
 
     smalls = deque(maxlen=span + 1)   # colour frames at processing size, newest last

@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 
 from src.gt_io import load_mot_gt
+from src.video_io import make_writer
 
 
 def color_for(tid: int) -> tuple[int, int, int]:
@@ -32,7 +33,7 @@ def main() -> None:
     if args.save:
         out = Path("results") / f"{args.video_id}_gt.mp4"
         size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+        writer = make_writer(out, fps, size)
 
     frame_idx = 0
     while True:
