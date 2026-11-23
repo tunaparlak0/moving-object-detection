@@ -18,6 +18,7 @@ Usage:
 """
 import argparse
 import csv
+import json
 import time
 from collections import deque
 from pathlib import Path
@@ -34,7 +35,7 @@ DEFAULTS = dict(
     gap_s=0.1,           # temporal gap k between compared frames (seconds)
     method="diff",       # diff | mog2
     flow="lk",           # lk | farneback
-    model="homography",  # homography | affine
+    model="homography",  # homography | affine | none (no-compensation baseline)
     diff_thresh=25,
     mog_window=3,        # MOG2: frames per side (t-Nk..t-k and t+k..t+Nk)
     mog_var=32.0,
@@ -136,6 +137,10 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
     mot_f.close()
     if writer:
         writer.release()
+    # frames for which an output was produced (others lack enough neighbours) -> used by evaluation
+    meta = {"first_frame": span + 1 - delay, "last_frame": frame_idx - delay, "n_frames": frame_idx,
+            "fps": fps, "k": k, "scale": s, "cfg": cfg}
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=1))
     dt = time.time() - t0
     return {"frames": frame_idx, "boxes": n_boxes, "sec": dt, "fps": frame_idx / dt if dt else 0, "k": k}
 

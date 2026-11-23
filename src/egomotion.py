@@ -56,7 +56,10 @@ def _farneback_correspondences(prev: np.ndarray, curr: np.ndarray, step: int = 1
 
 def estimate_motion(prev: np.ndarray, curr: np.ndarray, flow: str = "lk",
                     model: str = "homography", ransac_thresh: float = 2.0) -> MotionEstimate:
-    """prev/curr: grayscale uint8 frames of identical size."""
+    """prev/curr: grayscale uint8 frames of identical size.
+    model="none" is the no-compensation baseline: the camera is assumed static (identity)."""
+    if model == "none":
+        return MotionEstimate(np.eye(3), 1.0, 0, True)
     if flow == "lk":
         src, dst = _lk_correspondences(prev, curr)
     elif flow == "farneback":
