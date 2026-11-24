@@ -52,6 +52,8 @@ Video Sources: https://www.pexels.com/search/videos/drone%20footage/
 .venv\Scripts\python -m src.run_pipeline all --method mog2  # compensated MOG2, all videos
 .venv\Scripts\python -m src.run_pipeline vid_002 --flow farneback --model affine
 .venv\Scripts\python -m src.preannotate all                # GT draft for CVAT (detector + tracker + moving filter)
+.venv\Scripts\python -m src.run_pipeline all --model none   # no-compensation baseline
+.venv\Scripts\python -m src.evaluate --iou 0.3              # P/R/F1 vs data/annotations (--drafts: unreviewed drafts)
 .venv\Scripts\python -m pytest -q tests                     # synthetic moving-camera tests
 ```
 Outputs go to `results/<video>/<method>_<flow>_<model>/` (`detections.txt`, `motion.csv`, `vis.mp4`).
