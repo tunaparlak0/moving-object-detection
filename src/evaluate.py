@@ -16,6 +16,11 @@ Usage:
   python -m src.evaluate                                  # all runs found, reviewed GT
   python -m src.evaluate --drafts --iou 0.3
   python -m src.evaluate --runs mog2_lk_homography mog2_lk_none
+  python -m src.evaluate --frame-step 1                   # score every frame (fully reviewed GT)
+
+By default only every 15th frame is scored (CVAT frames 0, 15, 30, ...): reviewers check and fix
+exactly those frames (CVAT Settings -> Player -> Player step = 15); the frames in between come
+from the interpolated draft and are not trusted.
 """
 import argparse
 import csv
@@ -84,10 +89,16 @@ def frame_range(run_dir: Path, video: Path) -> tuple[int, int]:
     return span + 1 - delay, n - delay
 
 
-def evaluate_video(gt: dict, det: dict, first: int, last: int, thr: float) -> dict:
+def scored_frames(first: int, last: int, step: int) -> list[int]:
+    """Frames (1-based, MOT) to score. step > 1: only the frames reviewers checked in CVAT,
+    i.e. CVAT frames 0, step, 2*step, ... (= MOT frames 1, 1+step, ...)."""
+    return [f for f in range(first, last + 1) if step <= 1 or (f - 1) % step == 0]
+
+
+def evaluate_video(gt: dict, det: dict, first: int, last: int, thr: float, step: int = 1) -> dict:
     s = dict(tp=0, fp=0, fn=0, iou_sum=0.0, frames=0)
     cls_tot, cls_hit = defaultdict(int), defaultdict(int)
-    for f in range(first, last + 1):
+    for f in scored_frames(first, last, step):
         g, d = gt.get(f, []), det.get(f, [])
         tp, fp, fn, ious, hit = match_frame(g, d, thr)
         s["tp"] += tp; s["fp"] += fp; s["fn"] += fn; s["iou_sum"] += sum(ious); s["frames"] += 1
@@ -117,6 +128,8 @@ def main() -> None:
     ap.add_argument("--gt", default="data/annotations")
     ap.add_argument("--drafts", action="store_true", help="use unreviewed pre-annotations as GT (preliminary)")
     ap.add_argument("--iou", type=float, default=0.3)
+    ap.add_argument("--frame-step", type=int, default=15,
+                    help="score only CVAT frames 0, N, 2N, ... (the reviewed ones); 1 = every frame")
     ap.add_argument("--out", default="results/eval")
     args = ap.parse_args()
 
@@ -136,7 +149,8 @@ def main() -> None:
                 continue
             first, last = frame_range(run_dir, v)
             s = evaluate_video(load_boxes(gt_dir / f"{v.stem}.txt", True),
-                               load_boxes(run_dir / "detections.txt", False), first, last, args.iou)
+                               load_boxes(run_dir / "detections.txt", False), first, last, args.iou,
+                               args.frame_step)
             rows.append(dict(run=run, video=v.stem, tp=s["tp"], fp=s["fp"], fn=s["fn"], **summarize(s)))
             for key in ("tp", "fp", "fn", "iou_sum", "frames"):
                 tot[key] += s[key]
@@ -149,7 +163,7 @@ def main() -> None:
                                **summarize(tot))
 
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    tag = f"{gt_tag}_iou{args.iou:g}"
+    tag = f"{gt_tag}_iou{args.iou:g}" + (f"_step{args.frame_step}" if args.frame_step > 1 else "")
     with open(out / f"per_video_{tag}.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
     with open(out / f"summary_{tag}.csv", "w", newline="") as fh:
@@ -158,7 +172,8 @@ def main() -> None:
 
     if args.drafts:
         print("!! PRELIMINARY: GT = unreviewed pre-annotation drafts !!")
-    print(f"IoU >= {args.iou}, {len(videos)} videos, pooled over all frames")
+    scope = f"CVAT frames 0, {args.frame_step}, {2 * args.frame_step}, ..." if args.frame_step > 1 else "all frames"
+    print(f"IoU >= {args.iou}, {len(videos)} videos, pooled over {scope}")
     print(f"{'run':24} {'P':>6} {'R':>6} {'F1':>6} {'mIoU':>6}  {'R_veh':>6} {'R_2wh':>6} {'R_per':>6}")
     for run, m in pooled.items():
         print(f"{run:24} {m['precision']:6.3f} {m['recall']:6.3f} {m['f1']:6.3f} {m['mean_iou']:6.3f}  "

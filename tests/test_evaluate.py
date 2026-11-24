@@ -45,3 +45,11 @@ def test_no_compensation_baseline_returns_identity():
     img = np.random.default_rng(0).integers(0, 255, (64, 64), np.uint8)
     est = estimate_motion(img, np.roll(img, 5, axis=1), model="none")
     assert est.ok and np.allclose(est.M, np.eye(3))
+
+
+def test_scored_frames_match_cvat_player_step():
+    from src.evaluate import scored_frames
+    # MOT frame = CVAT frame + 1; reviewers check CVAT 0, 15, 30, ...
+    assert scored_frames(1, 50, 15) == [1, 16, 31, 46]
+    assert scored_frames(5, 50, 15) == [16, 31, 46]
+    assert scored_frames(1, 4, 1) == [1, 2, 3, 4]
