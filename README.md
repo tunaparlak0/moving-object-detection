@@ -15,7 +15,7 @@ platform (UAV / handheld / vehicle) by compensating camera ego-motion.
 5. **Post-processing & tracking** – morphology, contours → candidate boxes; class-agnostic
    Kalman/IoU tracker (`src/tracker.py`) keeps only blobs that persist and move in the
    camera-compensated frame. No object classifier is used: anything that moves is detected.
-6. **Evaluation** – compare against ground-truth boxes (Precision / Recall / F1 / IoU, MOT metrics).
+6. **Evaluation** – compare against ground-truth boxes (Precision / Recall / F1 / mean IoU, recall per class), all methods scored on the same frames.
 
 ## Dataset requirements
 

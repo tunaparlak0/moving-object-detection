@@ -25,7 +25,7 @@ numaralarını kaydırır ve etiketleri bozar).
 
 ## 2. Dosya düzeni ve isimlendirme
 ```
-data/videos/vid_001.mp4 ... vid_030.mp4
+data/videos/vid_001.mp4 ... vid_025.mp4
 data/annotations/vid_001.txt ...         (MOT formatı, aşağıda)
 data/manifest.csv                        (her videonun meta bilgisi)
 ```

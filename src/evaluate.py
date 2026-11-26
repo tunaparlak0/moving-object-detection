@@ -6,7 +6,9 @@ Reported per video and pooled over all videos (micro average):
   Precision, Recall, F1, mean IoU of matches, recall per GT class.
 
 Only frames for which the pipeline can produce output are scored (the first/last few frames
-lack temporal neighbours); see meta.json written by run_pipeline.
+lack temporal neighbours); see meta.json written by run_pipeline. Methods need different numbers
+of neighbour frames, so every run is scored on the SAME frames: per video, the frames that all
+compared runs produced output for (fair comparison; the set depends on which runs are compared).
 
 GT sources:
   data/annotations/vid_XXX.txt     reviewed CVAT export (default)
@@ -140,6 +142,17 @@ def main() -> None:
         raise SystemExit(f"no ground truth found in {gt_dir}")
     runs = args.runs or sorted({d.name for v in videos for d in (Path(args.results) / v.stem).glob("*_*_*") if d.is_dir()})
 
+    if not runs:
+        raise SystemExit(f"no pipeline runs found in {args.results}/vid_XXX/ - run src.run_pipeline first")
+
+    # common scored range per video: frames every compared run has output for
+    common = {}
+    for v in videos:
+        ranges = [frame_range(Path(args.results) / v.stem / run, v) for run in runs
+                  if (Path(args.results) / v.stem / run / "detections.txt").exists()]
+        if ranges:
+            common[v.stem] = (max(r[0] for r in ranges), min(r[1] for r in ranges))
+
     rows, pooled = [], {}
     for run in runs:
         tot = dict(tp=0, fp=0, fn=0, iou_sum=0.0, frames=0, cls_tot=defaultdict(int), cls_hit=defaultdict(int))
@@ -147,7 +160,7 @@ def main() -> None:
             run_dir = Path(args.results) / v.stem / run
             if not (run_dir / "detections.txt").exists():
                 continue
-            first, last = frame_range(run_dir, v)
+            first, last = common[v.stem]
             s = evaluate_video(load_boxes(gt_dir / f"{v.stem}.txt", True),
                                load_boxes(run_dir / "detections.txt", False), first, last, args.iou,
                                args.frame_step)
@@ -173,7 +186,7 @@ def main() -> None:
     if args.drafts:
         print("!! PRELIMINARY: GT = unreviewed pre-annotation drafts !!")
     scope = f"CVAT frames 0, {args.frame_step}, {2 * args.frame_step}, ..." if args.frame_step > 1 else "all frames"
-    print(f"IoU >= {args.iou}, {len(videos)} videos, pooled over {scope}")
+    print(f"IoU >= {args.iou}, {len(common)} videos, pooled over {scope} (same frames for every run)")
     print(f"{'run':24} {'P':>6} {'R':>6} {'F1':>6} {'mIoU':>6}  {'R_veh':>6} {'R_2wh':>6} {'R_per':>6}")
     for run, m in pooled.items():
         print(f"{run:24} {m['precision']:6.3f} {m['recall']:6.3f} {m['f1']:6.3f} {m['mean_iou']:6.3f}  "

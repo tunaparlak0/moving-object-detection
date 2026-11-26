@@ -39,3 +39,6 @@ results/*
 
 # Raw CVAT export zips (converted to data/annotations/*.txt by src.import_cvat)
 data/cvat_exports/
+
+# Office lock files
+~$*
