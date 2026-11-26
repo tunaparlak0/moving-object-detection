@@ -4,7 +4,7 @@ import numpy as np
 from src.egomotion import estimate_motion
 from src.evaluate import evaluate_video, iou_matrix, match_frame, summarize
 
-V, P = 1, 3  # class ids: vehicle, person
+V, T, P = 1, 2, 3  # class ids: vehicle, two_wheeler, person
 
 
 def test_iou_matrix_known_values():
@@ -33,12 +33,16 @@ def test_below_threshold_is_not_a_match():
 
 
 def test_evaluate_video_scores_only_the_given_frame_range_and_per_class_recall():
-    gt = {1: [(0, 0, 10, 10, V)], 2: [(0, 0, 10, 10, V), (50, 50, 10, 10, P)], 9: [(0, 0, 10, 10, V)]}
-    det = {2: [(0, 0, 10, 10, -1)], 3: [(80, 80, 5, 5, -1)]}
+    gt = {1: [(0, 0, 10, 10, V)],
+          2: [(0, 0, 10, 10, V), (50, 50, 10, 10, P)],
+          3: [(20, 20, 10, 10, T), (70, 70, 10, 10, T)],
+          9: [(0, 0, 10, 10, V)]}
+    det = {2: [(0, 0, 10, 10, -1)], 3: [(20, 20, 10, 10, -1), (90, 90, 5, 5, -1)]}
     s = evaluate_video(gt, det, first=2, last=3, thr=0.3)      # frames 1 and 9 ignored
-    assert (s["tp"], s["fp"], s["fn"], s["frames"]) == (1, 1, 1, 2)
+    assert (s["tp"], s["fp"], s["fn"], s["frames"]) == (2, 1, 2, 2)
     m = summarize(s)
-    assert m["precision"] == 0.5 and m["recall"] == 0.5 and m["recall_vehicle"] == 1.0 and m["recall_person"] == 0.0
+    assert m["precision"] == 2 / 3 and m["recall"] == 0.5
+    assert m["recall_vehicle"] == 1.0 and m["recall_two_wheeler"] == 0.5 and m["recall_person"] == 0.0
 
 
 def test_no_compensation_baseline_returns_identity():
