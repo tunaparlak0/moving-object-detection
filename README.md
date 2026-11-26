@@ -8,7 +8,10 @@ platform (UAV / handheld / vehicle) by compensating camera ego-motion.
 1. **Optical flow** – dense (Farneback) / sparse (Lucas-Kanade) motion between frames.
 2. **Global motion estimation** – Affine or Homography (RANSAC) on background flow.
 3. **Compensation** – warp the previous frame onto the current frame.
-4. **Foreground extraction** – frame differencing / MOG2 on compensated frames.
+4. **Foreground extraction** – frame differencing / MOG2 on compensated frames. For
+   differencing the temporal gap is chosen per frame: the longest of 0.5 / 0.25 / 0.1 s whose
+   aligned difference stays clean (≤ 1 % of pixels changed), so slow cameras get a long gap
+   (whole objects separate) and fast or parallax-heavy shots fall back to a short one.
 5. **Post-processing & tracking** – morphology, contours → candidate boxes; class-agnostic
    Kalman/IoU tracker (`src/tracker.py`) keeps only blobs that persist and move in the
    camera-compensated frame. No object classifier is used: anything that moves is detected.
@@ -25,7 +28,6 @@ platform (UAV / handheld / vehicle) by compensating camera ego-motion.
 data/videos/        raw videos (not committed)
 data/annotations/   ground-truth boxes
 src/                pipeline code
-notebooks/          experiments
 results/            outputs (not committed)
 ```
 
@@ -50,16 +52,19 @@ Video Sources: https://www.pexels.com/search/videos/drone%20footage/
 ## Usage
 ```powershell
 .venv\Scripts\python -m src.check_videos                    # dataset requirements check
-.venv\Scripts\python -m src.run_pipeline vid_002            # compensated 3-frame differencing + tracker
+.venv\Scripts\python -m src.run_pipeline vid_002            # compensated 3-frame differencing (adaptive gap) + tracker
 .venv\Scripts\python -m src.run_pipeline vid_002 --track 0  # raw per-frame blobs (no tracker)
+.venv\Scripts\python -m src.run_pipeline vid_002 --gap-max-s 0 --gap-s 0.25  # fixed gap instead of adaptive
 .venv\Scripts\python -m src.run_pipeline all --method mog2  # compensated MOG2, all videos
 .venv\Scripts\python -m src.run_pipeline vid_002 --flow farneback --model affine
 .venv\Scripts\python -m src.preannotate all                # GT draft for CVAT (detector + tracker + moving filter)
 .venv\Scripts\python -m src.run_pipeline all --model none   # no-compensation baseline
 .venv\Scripts\python -m src.evaluate --iou 0.3              # P/R/F1 vs data/annotations (--drafts: unreviewed drafts)
+.venv\Scripts\python -m src.visualize_gt all --save         # labelled previews -> results/gt_preview/
 .venv\Scripts\python -m pytest -q tests                     # synthetic moving-camera tests
 ```
 The YOLO detectors are used **only** by `src.preannotate` to speed up ground-truth labelling;
 the detection pipeline itself never uses them.
 
-Outputs go to `results/<video>/<method>_<flow>_<model>[_trk]/` (`detections.txt`, `motion.csv`, `vis.mp4`).
+Outputs go to `results/<video>/<method>_<flow>_<model>[_adapt][_trk]/` (`detections.txt`, `motion.csv`,
+`vis.mp4`, `meta.json` with the frame gaps chosen).

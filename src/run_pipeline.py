@@ -37,6 +37,9 @@ from src.video_io import make_writer
 DEFAULTS = dict(
     proc_max_side=960,   # processing resolution (longest side, px)
     gap_s=0.1,           # temporal gap k between compared frames (seconds)
+    gap_max_s=0.5,       # > gap_s: adaptive gap (diff only). Per frame, try gap_max_s, then halve
+                         # down to gap_s, and keep the longest gap whose aligned difference is clean
+    adapt_fg=0.01,       # "clean" = at most this fraction of valid pixels flagged as changed
     method="diff",       # diff | mog2
     flow="lk",           # lk | farneback
     model="homography",  # homography | affine | none (no-compensation baseline)
@@ -47,7 +50,7 @@ DEFAULTS = dict(
     blur=5,
     border_erode=15,     # ignore pixels near the warped image border
     min_area=30,         # at processing resolution
-    close_k=9,           # morphological closing kernel (px): joins fragments of one object
+    close_k=25,          # morphological closing kernel (px): joins fragments of one object
     track=1,             # 1: class-agnostic tracking filter, 0: raw per-frame blobs
     trk_min_s=0.2,       # a track must be observed in >= this many seconds' worth of frames
     trk_gap_s=0.2,       # max unobserved gap a track may bridge (seconds)
@@ -56,7 +59,22 @@ DEFAULTS = dict(
 
 
 def run_name(cfg: dict) -> str:
-    return f"{cfg['method']}_{cfg['flow']}_{cfg['model']}" + ("_trk" if cfg["track"] else "")
+    return (f"{cfg['method']}_{cfg['flow']}_{cfg['model']}" + ("_adapt" if adaptive(cfg) else "")
+            + ("_trk" if cfg["track"] else ""))
+
+
+def adaptive(cfg: dict) -> bool:
+    return cfg["method"] == "diff" and cfg["gap_max_s"] > cfg["gap_s"]
+
+
+def candidate_gaps(cfg: dict, fps: float) -> list[int]:
+    """Frame gaps to try, longest first: gap_max_s, gap_max_s/2, ... (>= gap_s), then gap_s."""
+    ks, g = [], cfg["gap_max_s"] if adaptive(cfg) else cfg["gap_s"]
+    while g > cfg["gap_s"] + 1e-9:
+        ks.append(max(1, round(g * fps)))
+        g /= 2
+    ks.append(max(1, round(cfg["gap_s"] * fps)))
+    return sorted(set(ks), reverse=True)
 
 
 def chain(steps: list[np.ndarray]) -> np.ndarray:
@@ -73,7 +91,8 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
     W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     s = min(1.0, cfg["proc_max_side"] / max(W, H))
     pw, ph = int(round(W * s)), int(round(H * s))
-    k = max(1, round(cfg["gap_s"] * fps))
+    gaps = candidate_gaps(cfg, fps)   # diff: tried longest first; mog2: [k]
+    k = gaps[0]
     n_side = 1 if cfg["method"] == "diff" else cfg["mog_window"]
     offsets = [-k * i for i in range(n_side, 0, -1)] + [k * i for i in range(1, n_side + 1)]
     delay = max(offsets)          # target frame lags the newest frame by `delay`
@@ -98,6 +117,7 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
     steps = deque(maxlen=span)        # steps[i] maps grays[i] -> grays[i+1]
     raw_prev = None
     frame_idx, n_boxes, t0 = 0, 0, time.time()
+    k_used = {}                       # adaptive gap: how often each frame gap was chosen
     first_out = span + 1 - delay      # first frame that gets an output
     while True:
         ok, frame = cap.read()
@@ -121,20 +141,32 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
         c = span - delay              # buffer index of the target frame
         target_idx = frame_idx - delay
         step_list = list(steps)
-        warped, valid = [], np.full((ph, pw), 255, np.uint8)
-        for off in offsets:
-            j = c + off
-            if off < 0:   # past frame j -> target c
-                Hj = chain(step_list[j:c])
-            else:         # future frame j -> target c
-                Hj = np.linalg.inv(chain(step_list[c:j]))
-            w_img, w_valid = warp_to(grays[j], Hj, (pw, ph))
-            warped.append(w_img)
-            valid = cv2.bitwise_and(valid, w_valid)
-        valid = cv2.erode(valid, erode_k)
+
+        def aligned(offs):
+            """Neighbour frames c+off warped into the target frame, and their common valid area."""
+            warped, valid = [], np.full((ph, pw), 255, np.uint8)
+            for off in offs:
+                j = c + off
+                if off < 0:   # past frame j -> target c
+                    Hj = chain(step_list[j:c])
+                else:         # future frame j -> target c
+                    Hj = np.linalg.inv(chain(step_list[c:j]))
+                w_img, w_valid = warp_to(grays[j], Hj, (pw, ph))
+                warped.append(w_img)
+                valid = cv2.bitwise_and(valid, w_valid)
+            return warped, cv2.erode(valid, erode_k)
+
         if cfg["method"] == "diff":
-            mask = compensated_diff(grays[c], warped, valid, cfg["diff_thresh"])
+            # longest gap whose aligned difference is clean; a long gap separates slow/uniform objects
+            # better, but alignment errors (fast camera, parallax) grow with the gap
+            for kc in gaps:
+                warped, valid = aligned([-kc, kc])
+                mask = compensated_diff(grays[c], warped, valid, cfg["diff_thresh"])
+                if kc == gaps[-1] or cv2.countNonZero(mask) <= cfg["adapt_fg"] * max(1, cv2.countNonZero(valid)):
+                    break
+            k_used[kc] = k_used.get(kc, 0) + 1
         else:
+            warped, valid = aligned(offsets)
             mask = compensated_mog2(grays[c], warped, valid, cfg["mog_var"], cfg["mog_bg_ratio"])
         mask = clean_mask(mask, close_k=cfg["close_k"])
         boxes = mask_to_boxes(mask, min_area=cfg["min_area"])
@@ -168,7 +200,7 @@ def process_video(vpath: Path, out_dir: Path, cfg: dict, save_video: bool = True
     det_f.close()
     # frames for which an output was produced (others lack enough neighbours) -> used by evaluation
     meta = {"first_frame": first_out, "last_frame": frame_idx - delay, "n_frames": frame_idx,
-            "fps": fps, "k": k, "scale": s, "cfg": cfg}
+            "fps": fps, "k": k, "k_used": {str(a): b for a, b in sorted(k_used.items())}, "scale": s, "cfg": cfg}
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=1))
     dt = time.time() - t0
     return {"frames": frame_idx, "boxes": n_boxes, "sec": dt, "fps": frame_idx / dt if dt else 0, "k": k}

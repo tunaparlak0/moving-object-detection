@@ -32,7 +32,7 @@ import cv2
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from src.run_pipeline import DEFAULTS
+from src.run_pipeline import DEFAULTS, candidate_gaps
 
 LABELS = ["vehicle", "two_wheeler", "person"]
 
@@ -83,7 +83,7 @@ def frame_range(run_dir: Path, video: Path) -> tuple[int, int]:
     method = run_dir.name.split("_")[0]
     cap = cv2.VideoCapture(str(video))
     fps, n = cap.get(cv2.CAP_PROP_FPS) or 30.0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    k = max(1, round(DEFAULTS["gap_s"] * fps))
+    k = candidate_gaps(dict(DEFAULTS, method=method), fps)[0]
     n_side = 1 if method == "diff" else DEFAULTS["mog_window"]
     delay, span = k * n_side, 2 * k * n_side
     return span + 1 - delay, n - delay

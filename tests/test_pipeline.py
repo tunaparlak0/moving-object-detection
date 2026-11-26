@@ -69,7 +69,7 @@ def test_pipeline_detects_moving_object(tmp_path: Path):
     vpath = tmp_path / "syn.mp4"
     wr = cv2.VideoWriter(str(vpath), cv2.VideoWriter_fourcc(*"mp4v"), 30, SIZE)
     gts = {}
-    for t in range(60):
+    for t in range(90):  # 3 s: the adaptive gap (up to 0.5 s) needs neighbours on both sides
         img, box = render(t)
         wr.write(img)
         gts[t + 1] = box
@@ -89,3 +89,12 @@ def test_pipeline_detects_moving_object(tmp_path: Path):
         assert len(frames) > 40, method
         assert hits / len(frames) > 0.9, (method, hits, len(frames))
         assert false_pos / len(frames) < 0.2, (method, false_pos)
+
+
+def test_candidate_gaps_longest_first_and_fixed_by_default():
+    from src.run_pipeline import candidate_gaps
+    fixed = dict(DEFAULTS, method="diff", gap_s=0.1, gap_max_s=0.0)
+    assert candidate_gaps(fixed, 30) == [3]
+    adapt = dict(fixed, gap_max_s=0.5)
+    assert candidate_gaps(adapt, 30) == [15, 8, 4, 3]       # 0.5, 0.25, 0.125, 0.1 s
+    assert candidate_gaps(dict(adapt, method="mog2"), 30) == [3]  # adaptation is diff-only
